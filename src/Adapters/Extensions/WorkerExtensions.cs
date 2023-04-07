@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace Adapters.Extensions
 {
@@ -27,6 +28,7 @@ namespace Adapters.Extensions
                         host,
                         topic,
                         groupId,
+                        sp.GetRequiredService<ActivitySource>(),
                         async (key, value) => await functionToExecute(sp.GetService<TService>(), key, value),
                         enableDeserializer
                     )
@@ -53,6 +55,7 @@ namespace Adapters.Extensions
                         host,
                         topic,
                         groupId,
+                        sp.GetRequiredService<ActivitySource>(),
                         async (key, value) => await functionToExecute(sp.GetService<TService>(), value),
                         enableDeserializer
                     )
@@ -79,6 +82,7 @@ namespace Adapters.Extensions
                         host,
                         topic,
                         groupId,
+                        sp.GetRequiredService<ActivitySource>(),
                         (key, value) => actionToExecute(sp.GetService<TService>(), key, value),
                         enableDeserializer
                     )

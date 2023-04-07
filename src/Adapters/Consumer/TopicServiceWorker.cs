@@ -4,6 +4,7 @@ using Adapters.Extensions;
 using Adapters.Serialization;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace Adapters.Consumer
 {
@@ -11,19 +12,22 @@ namespace Adapters.Consumer
     {
         private readonly bool _enableDeserializer;
         private readonly string _host;
+        protected readonly ActivitySource _activitySource;
 
         public TopicServiceWorker(ILogger? logger,
             string host,
             string topic,
             string groupId,
+            ActivitySource activitySource,
             bool? enableDeserializer)
         : base(logger, host, topic, groupId)
         {
             _host = host;
             _enableDeserializer = enableDeserializer ?? false;
+            this._activitySource = activitySource;
         }
 
-        protected abstract Task<PostConsumeAction> Dispatch(TKey key, TValue value);
+        protected abstract Task<PostConsumeAction> Dispatch(Activity? receiveActivity, TKey key, TValue value);
 
         private PostConsumeAction GetKeyAndValue(ConsumeResult<TKey, TValue> consumeResult, out TKey key, out TValue value)
         {
@@ -50,6 +54,18 @@ namespace Adapters.Consumer
 
         private async Task Receive(ConsumeResult<TKey, TValue> consumeResult, IConsumer<TKey, TValue> consumer, PostConsumeAction postReceiveAction)
         {
+            Thread thread = Thread.CurrentThread;
+            var os3 = Process.GetCurrentProcess().Threads[0].Id;
+            var s = Activity.Current?.SpanId;
+            var t = Activity.Current?.TraceId;            
+
+            using Activity receiveActivity = this._activitySource.SafeStartActivity("TopicServiceWorker.Receive", ActivityKind.Consumer);
+            if (Activity.Current != null)
+                receiveActivity?.SetParentId(Activity.Current.TraceId, Activity.Current.SpanId, ActivityTraceFlags.Recorded);
+            receiveActivity?.AddTag("Topic", this._topic);
+            receiveActivity?.AddTag("Partition", consumeResult.TopicPartition.Partition.Value);
+            receiveActivity?.AddTag("Thread.Id", thread.ManagedThreadId);
+
             if (postReceiveAction == PostConsumeAction.None)
             {
                 postReceiveAction = GetKeyAndValue(consumeResult, out TKey key, out TValue value);
@@ -59,7 +75,11 @@ namespace Adapters.Consumer
                     try
                     {
                         var headers = consumeResult.Message.Headers.HeaderToDictionary();
-                        postReceiveAction = await Dispatch(key, value);
+                        if(headers.ContainsKey("correlation.id"))
+                        {
+                            receiveActivity?.AddTag("Correlation.Id", headers["correlation.id"]);
+                        }                            
+                        postReceiveAction = await Dispatch(receiveActivity, key, value);
                     }
                     catch (Exception exception)
                     {
@@ -81,6 +101,8 @@ namespace Adapters.Consumer
                     consumer.Seek(consumeResult.TopicPartitionOffset);
                     break;
             }
+
+            receiveActivity?.SetEndTime(DateTime.UtcNow);
         }
 
         private ConsumerBuilder<TKey, TValue> GetConsumerBuilder(out PostConsumeAction postReceiveAction)
@@ -125,7 +147,7 @@ namespace Adapters.Consumer
             };
 
             var headers = new Dictionary<string, string>();
-            headers["kafkaId"] = Guid.NewGuid().ToString();
+            headers["correlation.id"] = Guid.NewGuid().ToString();
             headers["x-death"] = "1";
             headers["topic"] = topic;
 
@@ -193,9 +215,13 @@ namespace Adapters.Consumer
                                 break;
                             }
 
-                            var c = consumer.Consume(cancellationToken);
+                            // TODO: TESTAR ESSA PARTE
+                            //var c = consumer.Consume(cancellationToken);
                             //await ProducerAsync<TKey, TValue>("retry-topic", c.Key, c.Value);
                             consumer.Seek(consumeResult.TopicPartitionOffset);
+
+                            //consumer.Commit(consumeResult);
+                            //consumer.StoreOffset(consumeResult.TopicPartitionOffset);
                         }
                         catch (Exception ex)
                         {
@@ -206,7 +232,7 @@ namespace Adapters.Consumer
 
                     consumer.Close();
 
-                    _logger?.LogWarning($"Kafka consumer topic {this._topic} send message to un routed");
+                    _logger?.LogWarning($"Kafka consumer topic {this._topic} send message to unrouted");
                 }
                 catch (Exception ex)
                 {

@@ -71,7 +71,7 @@ namespace Producer.Worker
                 {
 
                     var headers = new Dictionary<string, string>();
-                    headers["kafkaId"] = Guid.NewGuid().ToString();
+                    headers["correlation.id"] = Guid.NewGuid().ToString();
                     headers["x-death"] = "1";
                     headers["topic"] = _topic;
 

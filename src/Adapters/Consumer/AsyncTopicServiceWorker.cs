@@ -1,5 +1,7 @@
 ﻿using Adapters.Consumer.Enums;
+using Adapters.Extensions;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace Adapters.Consumer
 {
@@ -13,9 +15,10 @@ namespace Adapters.Consumer
             string host,
             string topic,
             string groupId,
+            ActivitySource activitySource,
             Func<TValue, Task>? dispatchFunc,            
             bool? enableDeserializer = false)
-        : base(logger, host, topic, groupId, enableDeserializer)
+        : base(logger, host, topic, groupId, activitySource, enableDeserializer)
         {
             this.dispatchFunc = dispatchFunc;
         }
@@ -24,9 +27,10 @@ namespace Adapters.Consumer
             string host,
             string topic,
             string groupId,
+            ActivitySource activitySource,
             Func<TValue, Task<bool>>? functionToRun,            
             bool? enableDeserializer = false)
-        : base(logger, host, topic, groupId, enableDeserializer)
+        : base(logger, host, topic, groupId, activitySource, enableDeserializer)
         {
             this.functionToRun = functionToRun;
         }
@@ -35,15 +39,18 @@ namespace Adapters.Consumer
             string host,
             string topic,
             string groupId,
+            ActivitySource activitySource,
             Action<TKey, TValue>? disposeAction,
             bool? enableDeserializer = false)
-        : base(logger, host, topic, groupId, enableDeserializer)
+        : base(logger, host, topic, groupId, activitySource, enableDeserializer)
         {
             this.disposeAction = disposeAction;
         }
 
-        protected override async Task<PostConsumeAction> Dispatch(TKey key, TValue value)
+        protected override async Task<PostConsumeAction> Dispatch(Activity? receiveActivity, TKey key, TValue value)
         {
+            using Activity dispatchActivity = this._activitySource.SafeStartActivity("AsyncTopicServiceWorker.Dispatch", ActivityKind.Internal, receiveActivity.Context);
+
             if (dispatchFunc is not null)
                 await dispatchFunc(value);
 
@@ -52,12 +59,16 @@ namespace Adapters.Consumer
                 if (!await functionToRun(value))
                 {
                     _logger.LogWarning("Continue in Kafka");
+                    dispatchActivity?.SetEndTime(DateTime.UtcNow);
+
                     return PostConsumeAction.Reject;
                 }
             }
 
             if (disposeAction is not null)
                 disposeAction(key, value);
+
+            dispatchActivity?.SetEndTime(DateTime.UtcNow);
 
             return PostConsumeAction.Commit;
         }

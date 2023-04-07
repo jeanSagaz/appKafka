@@ -4,6 +4,10 @@ using Adapters.Producer;
 using Business.Models;
 using Business.Services;
 using Core.MessageBus;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using System.Diagnostics;
 
 namespace Consumer.Worker.Extensions
 {
@@ -36,16 +40,37 @@ namespace Consumer.Worker.Extensions
                 groupId: "payment-group-0",
                 functionToExecute: async (svc, key, value) => await svc.ExecuteAnything(key, value));
 
-            //services.AddHealthChecks();
-            //services
-            //    .AddHealthChecksUI();
-            //.AddHealthChecksUI(setupSettings: setup =>
-            //{
-            //setup.AddHealthCheckEndpoint("hc", "http://localhost:8001/hc");
-            //setup.AddHealthCheckEndpoint("endpoint2", "http://remoteendpoint:9000/healthz");
-            //setup.AddWebhookNotification("webhook1", uri: "http://httpbin.org/status/200?code=ax3rt56s", payload: "{...}");
-            //})
-            //.AddInMemoryStorage();
+            string serviceName = "KafkaConsumerWorkerService";
+            string serviceVersion = "1.0.0";
+
+            services.AddOpenTelemetry()
+                .WithTracing(tracingProviderBuilder =>
+                {
+                    //builder.AddConsoleExporter();
+                    tracingProviderBuilder.AddJaegerExporter(o =>
+                    {
+                        //o.AgentHost = "jaeger";
+                        o.AgentPort = 6831; // use port number here
+                    });
+                    tracingProviderBuilder.AddSource(serviceName);
+                    tracingProviderBuilder.SetResourceBuilder(
+                        ResourceBuilder.CreateDefault()
+                        .AddService(serviceName: serviceName, serviceVersion: serviceVersion));
+                    tracingProviderBuilder.AddHttpClientInstrumentation();
+                    tracingProviderBuilder.AddAspNetCoreInstrumentation();
+                })
+                .WithMetrics(metricsProviderBuilder =>
+                {
+                    metricsProviderBuilder.AddConsoleExporter();
+                    metricsProviderBuilder.SetResourceBuilder(
+                    ResourceBuilder.CreateDefault()
+                        .AddService(serviceName: serviceName, serviceVersion: serviceVersion));
+                    metricsProviderBuilder.AddHttpClientInstrumentation();
+                    metricsProviderBuilder.AddAspNetCoreInstrumentation();
+                });
+                //.StartWithHost();
+
+            services.AddSingleton(sp => new ActivitySource(serviceName, serviceVersion));
         }
     }
 }
