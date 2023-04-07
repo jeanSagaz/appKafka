@@ -11,7 +11,7 @@ using System.Diagnostics;
 
 namespace Consumer.Worker.Extensions
 {
-    public static class ProgamExtensions
+    public static class ProgramExtensions
     {
         public static void Configure(HostBuilderContext hostContext, IServiceCollection services)
         {
