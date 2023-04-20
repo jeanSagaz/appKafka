@@ -5,6 +5,7 @@ using Adapters.Serialization;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using System.Transactions;
 
 namespace Adapters.Consumer
 {
@@ -29,7 +30,7 @@ namespace Adapters.Consumer
 
         protected abstract Task<PostConsumeAction> Dispatch(Activity? receiveActivity, TKey key, TValue value);
 
-        private PostConsumeAction GetKeyAndValue(ConsumeResult<TKey, TValue> consumeResult, out TKey key, out TValue value)
+        private PostConsumeAction TryGetKeyAndValue(ConsumeResult<TKey, TValue> consumeResult, out TKey key, out TValue value)
         {
             if (consumeResult is null) throw new ArgumentNullException(nameof(consumeResult));
             PostConsumeAction postReceiveAction = PostConsumeAction.None;
@@ -54,21 +55,19 @@ namespace Adapters.Consumer
 
         private async Task Receive(ConsumeResult<TKey, TValue> consumeResult, IConsumer<TKey, TValue> consumer, PostConsumeAction postReceiveAction)
         {
-            Thread thread = Thread.CurrentThread;
-            var os3 = Process.GetCurrentProcess().Threads[0].Id;
-            var s = Activity.Current?.SpanId;
-            var t = Activity.Current?.TraceId;            
-
-            using Activity receiveActivity = this._activitySource.SafeStartActivity("TopicServiceWorker.Receive", ActivityKind.Consumer);
+            using Activity receiveActivity = this._activitySource.SafeStartActivity("topicServiceWorker.receive", ActivityKind.Consumer);
+            
             if (Activity.Current != null)
                 receiveActivity?.SetParentId(Activity.Current.TraceId, Activity.Current.SpanId, ActivityTraceFlags.Recorded);
-            receiveActivity?.AddTag("Topic", this._topic);
-            receiveActivity?.AddTag("Partition", consumeResult.TopicPartition.Partition.Value);
-            receiveActivity?.AddTag("Thread.Id", thread.ManagedThreadId);
+
+            receiveActivity?.AddTag("messaging.partition", consumeResult.TopicPartition.Partition.Value);
+            receiveActivity?.AddTag("messaging.system", "kafka");
+            receiveActivity?.AddTag("messaging.destination_kind", "topic");
+            receiveActivity?.AddTag("messaging.topic", this._topic);
 
             if (postReceiveAction == PostConsumeAction.None)
             {
-                postReceiveAction = GetKeyAndValue(consumeResult, out TKey key, out TValue value);
+                postReceiveAction = TryGetKeyAndValue(consumeResult, out TKey key, out TValue value);
 
                 if (postReceiveAction == PostConsumeAction.None)
                 {
@@ -189,7 +188,6 @@ namespace Adapters.Consumer
 
                         try
                         {
-                            //var consumeResult = consumer.Consume(stoppingToken);
                             consumeResult = consumer.Consume(cancellationToken);
                             if (consumeResult.IsPartitionEOF)
                             {
@@ -199,27 +197,33 @@ namespace Adapters.Consumer
 
                             await Receive(consumeResult, consumer, postReceiveAction);
                         }
-                        catch (OperationCanceledException oce)
+                        catch (OperationCanceledException ex)
                         {
-                            _logger?.LogWarning("Kafka consumer topic {topic} operation canceled: {Message}", this._topic, oce.Message);
+                            _logger?.LogWarning(ex, $"Kafka consumer topic {this._topic} operation canceled: {ex.Message}");
                             continue;
                         }
-                        catch (ConsumeException e)
+                        catch (ConsumeException ex)
                         {
                             // Consumer errors should generally be ignored (or logged) unless fatal.
-                            _logger?.LogWarning($"Kafka consumerException topic {this._topic} error: {e.Error.Reason}");
+                            _logger?.LogWarning(ex, $"Kafka consumerException topic {this._topic} error: {ex.Error.Reason}");
 
-                            if (e.Error.IsFatal)
+                            if (ex.Error.IsFatal)
                             {
-                                // https://github.com/edenhill/librdkafka/blob/master/INTRODUCTION.md#fatal-consumer-errors                            
+                                // https://github.com/edenhill/librdkafka/blob/master/INTRODUCTION.md#fatal-consumer-errors
+
+                                //await ProducerAsync<TKey, TValue>("deadletter-topic", consumeResult.Key, consumeResult.Value);
                                 break;
                             }
 
                             // TODO: TESTAR ESSA PARTE
-                            //var c = consumer.Consume(cancellationToken);
-                            //await ProducerAsync<TKey, TValue>("retry-topic", c.Key, c.Value);
-                            consumer.Seek(consumeResult.TopicPartitionOffset);
+                            // testar publicar no tópico de retry
+                            //consumeResult = consumer.Consume(cancellationToken);
+                            //await ProducerAsync<TKey, TValue>("retry-topic", consumeResult.Key, consumeResult.Value);
+                            
+                            // publica no tópico novamente
+                            //consumer.Seek(consumeResult.TopicPartitionOffset);
 
+                            // remove do tópico
                             //consumer.Commit(consumeResult);
                             //consumer.StoreOffset(consumeResult.TopicPartitionOffset);
                         }

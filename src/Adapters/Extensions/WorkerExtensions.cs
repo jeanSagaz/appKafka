@@ -18,7 +18,6 @@ namespace Adapters.Extensions
             if (services is null) throw new ArgumentNullException(nameof(services));
             if (string.IsNullOrEmpty(host)) throw new ArgumentException($"'{nameof(host)}' cannot be null or empty.", nameof(host));
             if (string.IsNullOrEmpty(topic)) throw new ArgumentException($"'{nameof(host)}' cannot be null or empty.", nameof(topic));
-            //if (topic < 1) throw new ArgumentOutOfRangeException(nameof(topic));
             if (functionToExecute is null) throw new ArgumentNullException(nameof(functionToExecute));
 
             services.AddSingleton<IHostedService>(sp =>
@@ -44,8 +43,7 @@ namespace Adapters.Extensions
         {
             if (services is null) throw new ArgumentNullException(nameof(services));
             if (string.IsNullOrEmpty(host)) throw new ArgumentException($"'{nameof(host)}' cannot be null or empty.", nameof(host));
-            if (string.IsNullOrEmpty(topic)) throw new ArgumentException($"'{nameof(host)}' cannot be null or empty.", nameof(topic));
-            //if (topic < 1) throw new ArgumentOutOfRangeException(nameof(topic));
+            if (string.IsNullOrEmpty(topic)) throw new ArgumentException($"'{nameof(topic)}' cannot be null or empty.", nameof(topic));
             if (functionToExecute is null) throw new ArgumentNullException(nameof(functionToExecute));
 
             services.AddSingleton<IHostedService>(sp =>
@@ -56,7 +54,7 @@ namespace Adapters.Extensions
                         topic,
                         groupId,
                         sp.GetRequiredService<ActivitySource>(),
-                        async (key, value) => await functionToExecute(sp.GetService<TService>(), value),
+                        async (value) => await functionToExecute(sp.GetService<TService>(), value),
                         enableDeserializer
                     )
                 );
@@ -71,8 +69,7 @@ namespace Adapters.Extensions
         {
             if (services is null) throw new ArgumentNullException(nameof(services));
             if (string.IsNullOrEmpty(host)) throw new ArgumentException($"'{nameof(host)}' cannot be null or empty.", nameof(host));
-            if (string.IsNullOrEmpty(topic)) throw new ArgumentException($"'{nameof(host)}' cannot be null or empty.", nameof(topic));
-            //if (topic < 1) throw new ArgumentOutOfRangeException(nameof(topic));
+            if (string.IsNullOrEmpty(topic)) throw new ArgumentException($"'{nameof(topic)}' cannot be null or empty.", nameof(topic));
             if (actionToExecute is null) throw new ArgumentNullException(nameof(actionToExecute));
 
             services.AddSingleton<IHostedService>(sp =>
