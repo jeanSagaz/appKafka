@@ -290,8 +290,6 @@ namespace Adapters.Consumer
                     }
 
                     consumer.Close();
-
-                    _logger?.LogWarning($"Kafka consumer topic {_topic}-topic send message to unrouted");
                 }
                 catch (Exception ex)
                 {
