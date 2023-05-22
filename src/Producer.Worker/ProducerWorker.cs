@@ -3,27 +3,21 @@ using Adapters.Serialization;
 using Confluent.Kafka;
 using Producer.Worker.Models;
 using System.Net;
-using System.Text;
-using System.Text.Json;
 
 namespace Producer.Worker
 {
     public class ProducerWorker : BackgroundService
     {
         private readonly ILogger<ProducerWorker> _logger;
-        private readonly IConfiguration _config;
         private readonly string _host;
         private readonly string _topic;
-
-        //private static readonly ObjectSerializer<T> serializer = new ObjectSerializer<T>();
 
         public ProducerWorker(ILogger<ProducerWorker> logger,
             IConfiguration config)
         {
             _logger = logger;
-            _config = config;
-            _host = _config.GetSection("KafkaConfigurations:Host").Value;
-            //_topic = _config.GetSection("KafkaConfigurations:Topic").Value;
+            _host = config.GetSection("KafkaConfigurations:Host").Value;
+            //_topic = config.GetSection("KafkaConfigurations:Topic").Value;
             _topic = "authorizer-topic";
         }
 
@@ -33,7 +27,7 @@ namespace Producer.Worker
             {
                 var config = new ProducerConfig 
                 { 
-                    BootstrapServers = _host,                    
+                    BootstrapServers = _host,
                     ClientId = Dns.GetHostName(),
                     // Set to true if you don't want to reorder messages on retry
                     EnableIdempotence = true,
@@ -46,17 +40,18 @@ namespace Producer.Worker
                     RetryBackoffMs = 1000,
                 };
 
-                using (var producer = new ProducerBuilder<string, string>(config)
-                //using (var producer = new ProducerBuilder<Null, ExecuteAnythingRequest>(config)
-                    //.SetValueSerializer(new CustomSerializer<ExecuteAnythingRequest>())
-                    //.SetKeySerializer(Serializers.Int64)                    
+                //using (var producer = new ProducerBuilder<string, string>(config)
+                using (var producer = new ProducerBuilder<Null, ExecuteAnythingRequest>(config)
+                    .SetValueSerializer(new CustomSerializer<ExecuteAnythingRequest>())
+                    //.SetKeySerializer(Serializers.Int64)
                     .SetErrorHandler((producer, error) =>
                     {
-                        // Write(this.HttpContext, "--Kafka Producer Error: " + error.Reason);                        
+                        // Write(this.HttpContext, "--Kafka Producer Error: " + error.Reason);
                         if (error.IsFatal)
                         {
-                            _logger.LogError("Kafka fatal error: {Reason}", error.Reason);
+                            _logger.LogError($"Kafka fatal error: {error.Reason}");
                         }
+
                         _logger.LogWarning("Kafka error: {Reason}", error.Reason);
                     })
                     .SetStatisticsHandler((_, json) =>
@@ -78,26 +73,26 @@ namespace Producer.Worker
                     int i = 0;
                     //while (!stoppingToken.IsCancellationRequested)
                     //{
-                        var result = await producer.ProduceAsync(_topic,
-                            new Message<string, string>
-                            {
-                                //Key = $"KEY_{i}",
-                                //Value = Guid.NewGuid().ToString()
-                                Key = "Jean",
-                                Value = "Jean",
-                                Headers = headers.DictionaryToHeader()
-                            });
-
                         //var result = await producer.ProduceAsync(_topic,
-                        //    new Message<Null, ExecuteAnythingRequest>
+                        //    new Message<string, string>
                         //    {
-                        //        Key = $"KEY_{i}",
-                        //        Value = new ExecuteAnythingRequest()
-                        //        {
-                        //            Name = $"Jean - {i}"
-                        //        },
+                        //        //Key = $"KEY_{i}",
+                        //        //Value = Guid.NewGuid().ToString()
+                        //        Key = "Jean",
+                        //        Value = "Jean",
                         //        Headers = headers.DictionaryToHeader()
                         //    });
+
+                        var result = await producer.ProduceAsync(_topic,
+                            new Message<Null, ExecuteAnythingRequest>
+                            {
+                                //Key = $"KEY_{i}",
+                                Value = new ExecuteAnythingRequest()
+                                {
+                                    Name = $"Jean - {i}"
+                                },
+                                Headers = headers.DictionaryToHeader()
+                            });
 
                         if (result.Status != PersistenceStatus.Persisted)
                         {

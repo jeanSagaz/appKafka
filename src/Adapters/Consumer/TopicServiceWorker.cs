@@ -5,12 +5,13 @@ using Adapters.Serialization;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
-using System.Transactions;
+using System.Net;
 
 namespace Adapters.Consumer
 {
     public abstract class TopicServiceWorker<TKey, TValue> : TopicServiceWorkerBase
     {
+        private int _connectMaxAttempts = 3;
         private readonly bool _enableDeserializer;
         private readonly string _host;
         protected readonly ActivitySource _activitySource;
@@ -25,12 +26,12 @@ namespace Adapters.Consumer
         {
             _host = host;
             _enableDeserializer = enableDeserializer ?? false;
-            this._activitySource = activitySource;
+            _activitySource = activitySource;
         }
 
         protected abstract Task<PostConsumeAction> Dispatch(Activity? receiveActivity, TKey key, TValue value);
 
-        private PostConsumeAction TryGetKeyAndValue(ConsumeResult<TKey, TValue> consumeResult, out TKey key, out TValue value)
+        private PostConsumeAction TryGetKeyAndValue(ConsumeResult<TKey, TValue> consumeResult, out TKey? key, out TValue? value)
         {
             if (consumeResult is null) throw new ArgumentNullException(nameof(consumeResult));
             PostConsumeAction postReceiveAction = PostConsumeAction.None;
@@ -44,10 +45,11 @@ namespace Adapters.Consumer
                 value = consumeResult.Message.Value;
                 _logger?.LogInformation($"Key: {consumeResult.Message.Key} | Value: {consumeResult.Message.Value}");
             }
-            catch (Exception exception)
+            catch (Exception ex)
             {
-                postReceiveAction = PostConsumeAction.Requeue;
-                _logger?.LogWarning("Message rejected during desserialization {exception}", exception);
+                // postReceiveAction = PostConsumeAction.Requeue;
+                _logger?.LogError(ex, "Error in 'TryGetKeyAndValue'");
+                throw;
             }
 
             return postReceiveAction;
@@ -56,7 +58,7 @@ namespace Adapters.Consumer
         private async Task Receive(ConsumeResult<TKey, TValue> consumeResult, IConsumer<TKey, TValue> consumer, PostConsumeAction postReceiveAction)
         {
             using Activity receiveActivity = this._activitySource.SafeStartActivity("topicServiceWorker.receive", ActivityKind.Consumer);
-            
+
             if (Activity.Current != null)
                 receiveActivity?.SetParentId(Activity.Current.TraceId, Activity.Current.SpanId, ActivityTraceFlags.Recorded);
 
@@ -67,23 +69,24 @@ namespace Adapters.Consumer
 
             if (postReceiveAction == PostConsumeAction.None)
             {
-                postReceiveAction = TryGetKeyAndValue(consumeResult, out TKey key, out TValue value);
+                postReceiveAction = TryGetKeyAndValue(consumeResult, out TKey? key, out TValue? value);
 
                 if (postReceiveAction == PostConsumeAction.None)
                 {
                     try
                     {
                         var headers = consumeResult.Message.Headers.HeaderToDictionary();
-                        if(headers.ContainsKey("correlation.id"))
-                        {
-                            receiveActivity?.AddTag("Correlation.Id", headers["correlation.id"]);
-                        }                            
-                        postReceiveAction = await Dispatch(receiveActivity, key, value);
+                        if (headers.ContainsKey("correlation.id"))                        
+                            receiveActivity?.AddTag("correlation.id", headers["correlation.id"]);                        
+
+                        if (value is not null)
+                            postReceiveAction = await Dispatch(receiveActivity, key, value);
                     }
-                    catch (Exception exception)
+                    catch (Exception ex)
                     {
                         postReceiveAction = PostConsumeAction.Reject;
-                        _logger?.LogError("Exception on processing message {topic} {exception}", _topic, exception);
+                        _logger?.LogError(ex, $"Exception on processing topic {_topic}");
+                        throw;
                     }
                 }
             }
@@ -92,8 +95,7 @@ namespace Adapters.Consumer
             {
                 case PostConsumeAction.None: throw new InvalidOperationException("None is unsupported");
                 case PostConsumeAction.Commit:
-                    consumer.Commit(consumeResult);
-                    consumer.StoreOffset(consumeResult.TopicPartitionOffset);
+                    Commit(consumer, consumeResult);
                     break;
                 case PostConsumeAction.Reject:
                 case PostConsumeAction.Requeue:
@@ -115,20 +117,20 @@ namespace Adapters.Consumer
                 {
                     consumerBuilder.SetKeyDeserializer(new CustomDeserializer<TKey>());
                 }
-                catch (Exception exception)
+                catch (Exception ex)
                 {
                     postReceiveAction = PostConsumeAction.Reject;
-                    _logger?.LogError(exception, "Message rejected during desserialization");
+                    _logger?.LogError(ex, "Key Message rejected during desserialization");
                 }
 
                 try
                 {
                     consumerBuilder.SetValueDeserializer(new CustomDeserializer<TValue>());
                 }
-                catch (Exception exception)
+                catch (Exception ex)
                 {
                     postReceiveAction = PostConsumeAction.Reject;
-                    _logger?.LogError(exception, "Message rejected during serialization");
+                    _logger?.LogError(ex, "Value Message rejected during serialization");
                 }
             }
 
@@ -138,32 +140,89 @@ namespace Adapters.Consumer
                 .SetPartitionsAssignedHandler(new HandlerConfiguration().SetPartitionsAssignedHandler);
         }
 
-        private async Task ProducerAsync<TKey, TValue>(string topic, TKey? key, TValue value)
+        private async Task ProducerAsync<TKey, TValue>(string topic, TKey? key, TValue? value)
         {
-            var config = new ProducerConfig
+            try
             {
-                BootstrapServers = _host,
-            };
+                var config = new ProducerConfig
+                {
+                    BootstrapServers = _host,
+                    ClientId = Dns.GetHostName(),
+                    // Set to true if you don't want to reorder messages on retry
+                    EnableIdempotence = true,
+                    // retry settings:
+                    // Receive acknowledgement from all sync replicas
+                    Acks = Acks.All,
+                    // Number of times to retry before giving up
+                    MessageSendMaxRetries = 3,
+                    // Duration to retry before next attempt
+                    RetryBackoffMs = 1000,
+                };
 
-            var headers = new Dictionary<string, string>();
-            headers["correlation.id"] = Guid.NewGuid().ToString();
-            headers["x-death"] = "1";
-            headers["topic"] = topic;
+                var headers = new Dictionary<string, string>();
+                headers["correlation.id"] = Guid.NewGuid().ToString();
+                headers["x-death"] = "1";
+                headers["topic"] = topic;
 
-            var producerBuilder = new ProducerBuilder<TKey, TValue>(config);
-            var producer = producerBuilder.Build();
+                if (key is null)
+                {
+                    var producer = new ProducerBuilder<Null, TValue>(config)
+                        .SetValueSerializer(new CustomSerializer<TValue>())
+                        .SetErrorHandler((prod, error) =>
+                        {
+                            if (error.IsFatal)
+                            {
+                                _logger?.LogError($"Kafka fatal error: {error.Reason}");
+                            }
 
-            var result = await producer.ProduceAsync($"{topic}-deadletter-topic", new Message<TKey, TValue>
+                            _logger?.LogWarning($"Kafka error: {error.Reason}");
+                        })
+                        .SetStatisticsHandler((_, json) =>
+                        {
+                            _logger?.LogInformation($"Set statistics handler producer worker json: {json}");
+                        })
+                        .SetLogHandler((_, log) =>
+                        {
+                            _logger?.LogInformation($"Kafka log: {log.Message}");
+                        })
+                        .Build();
+
+                    var result = await producer.ProduceAsync(topic, new Message<Null, TValue>
+                    {
+                        Value = value,
+                        Headers = headers.DictionaryToHeader()
+                    });
+
+                    if (result.Status != PersistenceStatus.Persisted)
+                    {
+                        // delivery might have failed after retries. This message requires manual processing.
+                        _logger?.LogWarning($"ERROR: Message not ack'd by all brokers (value: '{value}'). Delivery status: {result.Status}");
+                    }
+                }
+                else
+                {
+                    var producer = new ProducerBuilder<TKey, TValue>(config)
+                        .SetValueSerializer(new CustomSerializer<TValue>())
+                        .SetKeySerializer(new CustomSerializer<TKey>())
+                        .Build();
+
+                    var result = await producer.ProduceAsync(topic, new Message<TKey, TValue>
+                    {
+                        Key = key,
+                        Value = value,
+                        Headers = headers.DictionaryToHeader()
+                    });
+
+                    if (result.Status != PersistenceStatus.Persisted)
+                    {
+                        // delivery might have failed after retries. This message requires manual processing.
+                        _logger?.LogWarning($"ERROR: Message not ack'd by all brokers (value: '{value}'). Delivery status: {result.Status}");
+                    }
+                }
+            }
+            catch (Exception ex)
             {
-                Key = key,
-                Value = value,
-                Headers = headers.DictionaryToHeader()
-            });
-
-            if (result.Status != PersistenceStatus.Persisted)
-            {
-                // delivery might have failed after retries. This message requires manual processing.
-                _logger.LogWarning($"ERROR: Message not ack'd by all brokers (value: '{value}'). Delivery status: {result.Status}");
+                _logger?.LogError(ex, "Error in 'ProducerAsync'");
             }
 
             await Task.CompletedTask;
@@ -176,12 +235,13 @@ namespace Adapters.Consumer
                 try
                 {
                     PostConsumeAction postReceiveAction;
+                    var attempts = 0;
 
                     var consumerBuilder = GetConsumerBuilder(out postReceiveAction);
                     using var consumer = consumerBuilder.Build();
-                    consumer.Subscribe(_topic);
+                    consumer.Subscribe($"{_topic}-topic");
 
-                    _logger?.LogInformation($"Kafka consumer topic {_topic} loop started...\n");
+                    _logger?.LogInformation($"Kafka consumer topic {_topic}-topic loop started...\n");
                     while (!cancellationToken.IsCancellationRequested)
                     {
                         ConsumeResult<TKey, TValue> consumeResult = new ConsumeResult<TKey, TValue>();
@@ -193,59 +253,78 @@ namespace Adapters.Consumer
                             {
                                 continue;
                             }
-                            _logger?.LogInformation("Kafka consumer topic {topic} worker running at: {time}", _topic, DateTimeOffset.Now);
+                            _logger?.LogInformation($"Kafka consumer topic {_topic}-topic worker running at: {DateTimeOffset.Now}");
 
                             await Receive(consumeResult, consumer, postReceiveAction);
                         }
                         catch (OperationCanceledException ex)
                         {
-                            _logger?.LogWarning(ex, $"Kafka consumer topic {this._topic} operation canceled: {ex.Message}");
+                            _logger?.LogWarning(ex, $"Kafka consumer topic {_topic}-topic operation canceled: {ex.Message}");
                             continue;
                         }
                         catch (ConsumeException ex)
                         {
                             // Consumer errors should generally be ignored (or logged) unless fatal.
-                            _logger?.LogWarning(ex, $"Kafka consumerException topic {this._topic} error: {ex.Error.Reason}");
+                            _logger?.LogWarning(ex, $"Kafka consumerException topic {_topic}-topic error: {ex.Error.Reason}");
 
                             if (ex.Error.IsFatal)
                             {
                                 // https://github.com/edenhill/librdkafka/blob/master/INTRODUCTION.md#fatal-consumer-errors
 
-                                //await ProducerAsync<TKey, TValue>("deadletter-topic", consumeResult.Key, consumeResult.Value);
+                                await ProducerAsync<TKey, TValue>($"{_topic}-deadletter-topic", consumeResult.Key, consumeResult.Value);
+
+                                // remove do tópico                                
+                                Commit(consumer, consumeResult);
                                 break;
                             }
 
-                            // TODO: TESTAR ESSA PARTE
-                            // testar publicar no tópico de retry
-                            //consumeResult = consumer.Consume(cancellationToken);
-                            //await ProducerAsync<TKey, TValue>("retry-topic", consumeResult.Key, consumeResult.Value);
-                            
-                            // publica no tópico novamente
-                            //consumer.Seek(consumeResult.TopicPartitionOffset);
-
-                            // remove do tópico
-                            //consumer.Commit(consumeResult);
-                            //consumer.StoreOffset(consumeResult.TopicPartitionOffset);
+                            attempts = await RetryTopic(consumer, consumeResult, attempts);
                         }
                         catch (Exception ex)
                         {
-                            _logger?.LogError(ex, $"Kafka consumer topic {this._topic} exception error");
-                            throw;
+                            _logger?.LogError(ex, $"Kafka consumer topic {_topic}-topic exception error");
+                            //throw;
+
+                            attempts = await RetryTopic(consumer, consumeResult, attempts);
                         }
                     }
 
                     consumer.Close();
 
-                    _logger?.LogWarning($"Kafka consumer topic {this._topic} send message to unrouted");
+                    _logger?.LogWarning($"Kafka consumer topic {_topic}-topic send message to unrouted");
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogError(ex, "Kafka consumer topic {topic} will be restarted due to non-retryable exception: {Message}", this._topic, ex.Message);
+                    _logger?.LogError(ex, $"Kafka consumer topic {_topic}-topic will be restarted due to non-retryable");
                 }
 
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             await Task.CompletedTask;
+        }
+
+        private async Task<int> RetryTopic(IConsumer<TKey, TValue> consumer, ConsumeResult<TKey, TValue> consumeResult, int attempts)
+        {
+            attempts++;
+            if (attempts <= _connectMaxAttempts)
+            {
+                // republica no tópico
+                consumer.Seek(consumeResult.TopicPartitionOffset);
+                return attempts;
+            }
+
+            await ProducerAsync<TKey, TValue>($"{_topic}-deadletter-topic", consumeResult.Key, consumeResult.Value);
+
+            // remove do tópico
+            Commit(consumer, consumeResult);
+
+            return 0;
+        }
+
+        private void Commit(IConsumer<TKey, TValue> consumer, ConsumeResult<TKey, TValue> consumeResult)
+        {
+            consumer.Commit(consumeResult);
+            consumer.StoreOffset(consumeResult.TopicPartitionOffset);
         }
     }
 }

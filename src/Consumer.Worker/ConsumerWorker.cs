@@ -1,3 +1,4 @@
+using Adapters.Models;
 using Adapters.Serialization;
 using Business.Models;
 using Confluent.Kafka;
@@ -7,17 +8,22 @@ namespace Consumer.Worker
     public class ConsumerWorker : BackgroundService
     {
         private readonly ILogger<ConsumerWorker> _logger;
+        private readonly AppSettings _kafkaConfigurations;
         private readonly IConfiguration _config;
         private readonly string _host;
         private readonly string _topic;
 
         public ConsumerWorker(ILogger<ConsumerWorker> logger,
-            IConfiguration config)
+            AppSettings appSettings)
+            //IConfiguration config)
         {
             _logger = logger;
-            _config = config;
-            _host = _config.GetSection("KafkaConfigurations:Host").Value;
-            _topic = _config.GetSection("KafkaConfigurations:Topic").Value;
+            _kafkaConfigurations = appSettings;
+            //_config = config;
+            //_host = _config.GetSection("KafkaConfigurations:Host").Value;
+            //_topic = _config.GetSection("KafkaConfigurations:Topic").Value;
+            _host = _kafkaConfigurations.KafkaConfigurations.Host;
+            _topic = "authorizer-topic";
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -42,7 +48,10 @@ namespace Consumer.Worker
                     }
                     _logger.LogWarning("Kafka error: {Reason}", error.Reason);
                 })
-                .SetPartitionsAssignedHandler((c, partitions) => _logger.LogInformation("Kafka log: Assigned partitions: [{Partitions}]", string.Join(", ", partitions)))
+                .SetPartitionsAssignedHandler((c, partitions) => 
+                {
+                    _logger.LogInformation("Kafka log: Assigned partitions: [{Partitions}]", string.Join(", ", partitions));
+                })
                 .Build())
             {
                 consumer.Subscribe(_topic);

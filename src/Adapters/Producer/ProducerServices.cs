@@ -1,27 +1,27 @@
 ﻿using Adapters.Configurations;
 using Adapters.Extensions;
+using Adapters.Models;
 using Adapters.Serialization;
 using Confluent.Kafka;
 using Core.MessageBus;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
-using System.Transactions;
+using System.Net;
 
 namespace Adapters.Producer
 {
     public class ProducerServices : IProducerServices
     {
         private readonly ILogger<ProducerServices> _logger;
-        private readonly string _bootstrapserver;
+        private readonly string _host;
         private readonly ActivitySource _activitySource;
 
         public ProducerServices(ILogger<ProducerServices> logger,
-            IConfiguration config,
+            AppSettings appSettings,
             ActivitySource activitySource)
         {
             _logger = logger;
-            _bootstrapserver = config.GetSection("KafkaConfigurations:Host").Value;
+            _host = appSettings.KafkaConfigurations.Host;
             _activitySource = activitySource;
         }
 
@@ -39,7 +39,17 @@ namespace Adapters.Producer
 
                 var config = new ProducerConfig
                 {
-                    BootstrapServers = _bootstrapserver,
+                    BootstrapServers = _host,
+                    ClientId = Dns.GetHostName(),
+                    // Set to true if you don't want to reorder messages on retry
+                    EnableIdempotence = true,
+                    // retry settings:
+                    // Receive acknowledgement from all sync replicas
+                    Acks = Acks.All,
+                    // Number of times to retry before giving up
+                    MessageSendMaxRetries = 3,
+                    // Duration to retry before next attempt
+                    RetryBackoffMs = 1000,
                 };
 
                 var headers = new Dictionary<string, string>();
@@ -47,8 +57,8 @@ namespace Adapters.Producer
                 headers["x-death"] = "1";
                 headers["topic"] = topic;
 
-                var producerBuilder = GetProducerBuilder<TKey, TValue>(config, enableKeySerializer, enableValueSerializer);
-                var producer = producerBuilder.Build();
+                var producer = GetProducerBuilder<TKey, TValue>(config, enableKeySerializer, enableValueSerializer)
+                    .Build();
 
                 var result = await producer.ProduceAsync(topic, new Message<TKey, TValue>
                 {
@@ -87,7 +97,17 @@ namespace Adapters.Producer
 
                 var config = new ProducerConfig
                 {
-                    BootstrapServers = _bootstrapserver,
+                    BootstrapServers = _host,
+                    ClientId = Dns.GetHostName(),
+                    // Set to true if you don't want to reorder messages on retry
+                    EnableIdempotence = true,
+                    // retry settings:
+                    // Receive acknowledgement from all sync replicas
+                    Acks = Acks.All,
+                    // Number of times to retry before giving up
+                    MessageSendMaxRetries = 3,
+                    // Duration to retry before next attempt
+                    RetryBackoffMs = 1000,
                 };
 
                 var headers = new Dictionary<string, string>();

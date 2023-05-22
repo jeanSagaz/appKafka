@@ -27,7 +27,6 @@ namespace Adapters.Consumer
                 EnablePartitionEof = true,
                 EnableAutoCommit = false,                
                 EnableAutoOffsetStore = false,
-                MaxPollIntervalMs = 10000
             };
         }
 
@@ -37,12 +36,9 @@ namespace Adapters.Consumer
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                _logger?.LogInformation("Kafka worker running at: {time} - Topic: {topic}", DateTimeOffset.Now, _topic);
+                _logger?.LogInformation($"Topic: {_topic}-topic kafka worker running at: {DateTimeOffset.Now}");
                 await Task.Delay(1000, stoppingToken);
             }
-
-            // or
-            // await Task.CompletedTask;
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)

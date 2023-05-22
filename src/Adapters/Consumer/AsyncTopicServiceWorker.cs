@@ -17,8 +17,7 @@ namespace Adapters.Consumer
             string groupId,
             ActivitySource activitySource,
             Func<TValue, Task>? dispatchFunc,            
-            bool? enableDeserializer = false)
-        : base(logger, host, topic, groupId, activitySource, enableDeserializer)
+            bool? enableDeserializer = false) : base(logger, host, topic, groupId, activitySource, enableDeserializer)
         {
             this.dispatchFunc = dispatchFunc;
         }
@@ -29,8 +28,7 @@ namespace Adapters.Consumer
             string groupId,
             ActivitySource activitySource,
             Func<TValue, Task<bool>>? functionToRun,            
-            bool? enableDeserializer = false)
-        : base(logger, host, topic, groupId, activitySource, enableDeserializer)
+            bool? enableDeserializer = false) : base(logger, host, topic, groupId, activitySource, enableDeserializer)
         {
             this.functionToRun = functionToRun;
         }

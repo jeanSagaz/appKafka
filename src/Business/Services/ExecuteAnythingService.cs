@@ -14,8 +14,8 @@ namespace Business.Services
 
         public async Task ExecuteAnything(ExecuteAnythingRequest model)
         {
-            if (model?.Name == "Jean")
-                throw new Exception();            
+            //if (model?.Name == "Jean")
+                throw new Exception("Testando exception");            
 
             await _producerServices.ProducerAsync<string, string>("payment-topic", $"key: {model?.Name}", $"value: {model?.Name}");
         }
