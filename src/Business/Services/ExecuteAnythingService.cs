@@ -12,10 +12,15 @@ namespace Business.Services
             _producerServices = producerServices;
         }
 
+        public async Task ThrowException(ExecuteAnythingRequest model)
+        {            
+            throw new Exception("ThrowException - Testando exception");
+        }
+
         public async Task ExecuteAnything(ExecuteAnythingRequest model)
         {
-            //if (model?.Name == "Jean")
-                throw new Exception("Testando exception");            
+            if (model?.Name == "Jean")
+                throw new Exception("ExecuteAnything - Testando exception");            
 
             await _producerServices.ProducerAsync<string, string>("payment-topic", $"key: {model?.Name}", $"value: {model?.Name}");
         }

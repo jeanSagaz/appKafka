@@ -29,7 +29,7 @@ namespace Adapters.Consumer
             _activitySource = activitySource;
         }
 
-        protected abstract Task<PostConsumeAction> Dispatch(Activity? receiveActivity, TKey key, TValue value);
+        protected abstract Task<PostConsumeAction> Dispatch(Activity? receiveActivity, TKey? key, TValue value);
 
         private PostConsumeAction TryGetKeyAndValue(ConsumeResult<TKey, TValue> consumeResult, out TKey? key, out TValue? value)
         {
@@ -249,10 +249,8 @@ namespace Adapters.Consumer
                         try
                         {
                             consumeResult = consumer.Consume(cancellationToken);
-                            if (consumeResult.IsPartitionEOF)
-                            {
-                                continue;
-                            }
+                            if (consumeResult.IsPartitionEOF) continue;
+                            
                             _logger?.LogInformation($"Kafka consumer topic {_topic}-topic worker running at: {DateTimeOffset.Now}");
 
                             await Receive(consumeResult, consumer, postReceiveAction);
@@ -270,10 +268,8 @@ namespace Adapters.Consumer
                             if (ex.Error.IsFatal)
                             {
                                 // https://github.com/edenhill/librdkafka/blob/master/INTRODUCTION.md#fatal-consumer-errors
-
                                 await ProducerAsync<TKey, TValue>($"{_topic}-deadletter-topic", consumeResult.Key, consumeResult.Value);
 
-                                // remove do tópico                                
                                 Commit(consumer, consumeResult);
                                 break;
                             }
@@ -306,14 +302,12 @@ namespace Adapters.Consumer
             attempts++;
             if (attempts <= _connectMaxAttempts)
             {
-                // republica no tópico
                 consumer.Seek(consumeResult.TopicPartitionOffset);
                 return attempts;
             }
 
             await ProducerAsync<TKey, TValue>($"{_topic}-deadletter-topic", consumeResult.Key, consumeResult.Value);
 
-            // remove do tópico
             Commit(consumer, consumeResult);
 
             return 0;

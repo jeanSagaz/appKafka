@@ -25,7 +25,7 @@ namespace Adapters.Consumer
                 // Read messages from start if no commit exists.
                 AutoOffsetReset = AutoOffsetReset.Earliest,
                 EnablePartitionEof = true,
-                EnableAutoCommit = false,                
+                EnableAutoCommit = false,
                 EnableAutoOffsetStore = false,
             };
         }

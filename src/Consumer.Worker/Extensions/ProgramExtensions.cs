@@ -20,7 +20,7 @@ namespace Consumer.Worker.Extensions
             services.AddSingleton(appSettings);
 
             if (appSettings?.KafkaConfigurations is null)
-                throw new ArgumentNullException("KafkaConfigurations cannot be null");
+                throw new ArgumentNullException("Kafka configurations cannot be null");
 
             services.AddTransient<IProducerServices, ProducerServices>();
             services.AddTransient<ExecuteAnythingService>();
@@ -31,15 +31,15 @@ namespace Consumer.Worker.Extensions
                     functionToExecute: async (svc, value) => await svc.ExecuteAnything(value),
                     enableDeserializer: true);
 
-            //services.AddAsyncTopicConsumer<ExecuteAnythingService, string, string>(host: configurations.Host,
-            //    topic: "authorizer-topic",
-            //    groupId: "authorizer-group-0",
-            //    functionToExecute: async (svc, key, value) => await svc.ExecuteAnything(key, value));
+            services.AddAsyncTopicConsumer<ExecuteAnythingService, ExecuteAnythingRequest>(host: appSettings.KafkaConfigurations.Host,
+                topic: "exception",
+                groupId: "exception-group-0",
+                functionToExecute: async (svc, value) => await svc.ThrowException(value));
 
-            //services.AddAsyncTopicConsumer<ExecuteAnythingService, string, string>(host: configurations.Host,
-            //    topic: "payment",
-            //    groupId: "payment-group-0",
-            //    functionToExecute: async (svc, key, value) => await svc.ExecuteAnything(key, value));
+            services.AddAsyncTopicConsumer<ExecuteAnythingService, string, string>(host: appSettings.KafkaConfigurations.Host,
+                topic: "payment",
+                groupId: "payment-group-0",
+                functionToExecute: async (svc, key, value) => await svc.ExecuteAnything(key, value));
 
             services.AddOpenTelemetry(configuration);
         }

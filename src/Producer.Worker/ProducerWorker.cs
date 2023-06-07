@@ -46,7 +46,6 @@ namespace Producer.Worker
                     //.SetKeySerializer(Serializers.Int64)
                     .SetErrorHandler((producer, error) =>
                     {
-                        // Write(this.HttpContext, "--Kafka Producer Error: " + error.Reason);
                         if (error.IsFatal)
                         {
                             _logger.LogError($"Kafka fatal error: {error.Reason}");
