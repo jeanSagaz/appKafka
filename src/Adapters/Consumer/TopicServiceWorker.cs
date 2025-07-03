@@ -306,7 +306,7 @@ namespace Adapters.Consumer
                 return attempts;
             }
 
-            await ProducerAsync<TKey, TValue>($"{_topic}-deadletter-topic", consumeResult.Key, consumeResult.Value);
+            await ProducerAsync<TKey, TValue>($"{_topic}-deadletter-topic", consumeResult.Message.Key, consumeResult.Message.Value);
 
             Commit(consumer, consumeResult);
 
