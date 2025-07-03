@@ -1,7 +1,20 @@
+//using Consumer.Worker.Extensions;
+
+//IHost host = Host.CreateDefaultBuilder(args)
+//    .ConfigureServices(ProgramExtensions.Configure)
+//    .Build();
+
+//await host.RunAsync();
+
 using Consumer.Worker.Extensions;
+using Microsoft.AspNetCore.Builder;
 
-IHost host = Host.CreateDefaultBuilder(args)
-    .ConfigureServices(ProgramExtensions.Configure)
-    .Build();
+var builder = WebApplication.CreateBuilder(args);
 
-await host.RunAsync();
+builder.Services.Configure(builder.Configuration);
+
+var app = builder.Build();
+
+//app.UseOpenTelemetry();
+
+await app.RunAsync();

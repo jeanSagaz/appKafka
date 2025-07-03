@@ -36,7 +36,7 @@ namespace Adapters.Consumer
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                _logger?.LogInformation($"Topic: {_topic}-topic kafka worker running at: {DateTimeOffset.Now}");
+                _logger?.LogInformation($"Topic '{_topic}-topic' kafka worker running at: {DateTimeOffset.Now}");
                 await Task.Delay(1000, stoppingToken);
             }
         }

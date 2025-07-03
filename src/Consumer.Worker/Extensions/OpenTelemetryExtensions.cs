@@ -1,8 +1,10 @@
-﻿using OpenTelemetry.Exporter;
+﻿using Microsoft.AspNetCore.Builder;
+using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using Prometheus;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
@@ -12,20 +14,20 @@ namespace Consumer.Worker.Extensions
     {
         public static void AddOpenTelemetry(this IServiceCollection services, IConfiguration configuration)
         {
-            string serviceName = configuration.GetValue<string>("ServiceName").ToLowerInvariant();
+            string serviceName = configuration.GetValue<string>("ServiceName")!.ToLowerInvariant();
             string serviceVersion = "1.0.0";
 
             // Note: Switch between Zipkin/Jaeger/OTLP/Console by setting UseTracingExporter in appsettings.json.
-            var tracingExporter = configuration.GetValue<string>("UseTracingExporter").ToLowerInvariant();
+            var tracingExporter = configuration.GetValue<string>("UseTracingExporter")!.ToLowerInvariant();
 
             // Note: Switch between Prometheus/OTLP/Console by setting UseMetricsExporter in appsettings.json.
-            var metricsExporter = configuration.GetValue<string>("UseMetricsExporter").ToLowerInvariant();
+            var metricsExporter = configuration.GetValue<string>("UseMetricsExporter")!.ToLowerInvariant();
 
             // Note: Switch between Console/OTLP by setting UseLogExporter in appsettings.json.
-            var logExporter = configuration.GetValue<string>("UseLogExporter").ToLowerInvariant();
+            var logExporter = configuration.GetValue<string>("UseLogExporter")!.ToLowerInvariant();
 
             // Note: Switch between Explicit/Exponential by setting HistogramAggregation in appsettings.json
-            var histogramAggregation = configuration.GetValue<string>("HistogramAggregation").ToLowerInvariant();
+            var histogramAggregation = configuration.GetValue<string>("HistogramAggregation")!.ToLowerInvariant();
 
             // Build a resource configuration action to set service information.
             Action<ResourceBuilder> configureResource = r => r.AddService(
@@ -78,7 +80,7 @@ namespace Consumer.Worker.Extensions
                             tracingProviderBuilder.AddOtlpExporter(otlpOptions =>
                             {
                                 // Use IConfiguration directly for Otlp exporter endpoint option.
-                                otlpOptions.Endpoint = new Uri(configuration.GetValue<string>("Otlp:Endpoint"));
+                                otlpOptions.Endpoint = new Uri(configuration.GetValue<string>("Otlp:Endpoint")!);
                             });
                             break;
 
@@ -94,9 +96,9 @@ namespace Consumer.Worker.Extensions
                     metricsProviderBuilder
                         .SetResourceBuilder(ResourceBuilder.CreateDefault()
                             .AddService(serviceName: serviceName, serviceVersion: serviceVersion))
-                        //.AddRuntimeInstrumentation()
+                        .AddAspNetCoreInstrumentation()
                         .AddHttpClientInstrumentation()
-                        .AddAspNetCoreInstrumentation();
+                        .AddRuntimeInstrumentation();
 
                     switch (histogramAggregation)
                     {
@@ -124,7 +126,7 @@ namespace Consumer.Worker.Extensions
                             metricsProviderBuilder.AddOtlpExporter(otlpOptions =>
                             {
                                 // Use IConfiguration directly for Otlp exporter endpoint option.
-                                otlpOptions.Endpoint = new Uri(configuration.GetValue<string>("Otlp:Endpoint"));
+                                otlpOptions.Endpoint = new Uri(configuration.GetValue<string>("Otlp:Endpoint")!);
                             });
                             break;
                         default:
@@ -151,7 +153,7 @@ namespace Consumer.Worker.Extensions
                             options.AddOtlpExporter(otlpOptions =>
                             {
                                 // Use IConfiguration directly for Otlp exporter endpoint option.
-                                otlpOptions.Endpoint = new Uri(configuration.GetValue<string>("Otlp:Endpoint"));
+                                otlpOptions.Endpoint = new Uri(configuration.GetValue<string>("Otlp:Endpoint")!);
                             });
                             break;
                         default:
@@ -169,6 +171,16 @@ namespace Consumer.Worker.Extensions
             });
 
             services.AddSingleton(sp => new ActivitySource(serviceName, serviceVersion));
+        }
+
+        public static void UseOpenTelemetry(this WebApplication app)
+        {
+            //app.UseOpenTelemetryPrometheusScrapingEndpoint();
+
+            //app.MapPrometheusScrapingEndpoint();
+
+            app.UseHttpMetrics();
+            app.MapMetrics();
         }
     }
 }

@@ -268,7 +268,7 @@ namespace Adapters.Consumer
                             if (ex.Error.IsFatal)
                             {
                                 // https://github.com/edenhill/librdkafka/blob/master/INTRODUCTION.md#fatal-consumer-errors
-                                await ProducerAsync<TKey, TValue>($"{_topic}-deadletter-topic", consumeResult.Key, consumeResult.Value);
+                                await ProducerAsync<TKey, TValue>($"{_topic}-deadletter-topic", consumeResult.Message.Key, consumeResult.Message.Value);
 
                                 Commit(consumer, consumeResult);
                                 break;
