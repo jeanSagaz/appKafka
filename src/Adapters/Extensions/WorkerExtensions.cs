@@ -1,4 +1,5 @@
 ﻿using Adapters.Consumer;
+using Core.MessageBus;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -27,6 +28,7 @@ namespace Adapters.Extensions
                         host,
                         topic,
                         groupId,
+                        sp.GetRequiredService<IProducerService>(),
                         sp.GetRequiredService<ActivitySource>(),
                         async (key, value) => await functionToExecute(sp.GetService<TService>(), key, value),
                         enableDeserializer
@@ -53,6 +55,7 @@ namespace Adapters.Extensions
                         host,
                         topic,
                         groupId,
+                        sp.GetRequiredService<IProducerService>(),
                         sp.GetRequiredService<ActivitySource>(),
                         async (value) => await functionToExecute(sp.GetService<TService>(), value),
                         enableDeserializer
@@ -79,6 +82,7 @@ namespace Adapters.Extensions
                         host,
                         topic,
                         groupId,
+                        sp.GetRequiredService<IProducerService>(),
                         sp.GetRequiredService<ActivitySource>(),
                         (key, value) => actionToExecute(sp.GetService<TService>(), key, value),
                         enableDeserializer

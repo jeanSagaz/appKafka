@@ -6,11 +6,11 @@ namespace Adapters.Consumer
 {
     public abstract class TopicServiceWorkerBase : BackgroundService
     {
-        protected readonly ILogger? _logger;
+        protected readonly ILogger _logger;
         protected readonly ConsumerConfig _consumerConfig;
         protected string _topic { get; }
 
-        protected TopicServiceWorkerBase(ILogger? logger,
+        protected TopicServiceWorkerBase(ILogger logger,
             string host,
             string topic,
             string groupId)
@@ -36,7 +36,7 @@ namespace Adapters.Consumer
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                _logger?.LogInformation($"Topic '{_topic}-topic' kafka worker running at: {DateTimeOffset.Now}");
+                _logger.LogInformation($"Topic '{_topic}-topic' kafka worker running at: {DateTimeOffset.Now}");
                 await Task.Delay(1000, stoppingToken);
             }
         }
@@ -44,13 +44,13 @@ namespace Adapters.Consumer
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
             await base.StopAsync(cancellationToken);
-            _logger?.LogInformation($"Kafka worker topic {_topic} stopAsync.");
+            _logger.LogInformation($"Kafka worker topic {_topic} stopAsync.");
         }
 
         public override void Dispose()
         {            
             base.Dispose();
-            _logger?.LogInformation($"Kafka worker topic {_topic} dispose.");
+            _logger.LogInformation($"Kafka worker topic {_topic} dispose.");
         }
 
         protected abstract Task BuildConsumer(CancellationToken stoppingToken);

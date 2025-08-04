@@ -5,9 +5,9 @@ namespace Business.Services
 {
     public class ExecuteAnythingService
     {
-        private readonly IProducerServices _producerServices;
+        private readonly IProducerService _producerServices;
 
-        public ExecuteAnythingService(IProducerServices producerServices)
+        public ExecuteAnythingService(IProducerService producerServices)
         {
             _producerServices = producerServices;
         }

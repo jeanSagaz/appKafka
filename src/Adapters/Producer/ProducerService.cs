@@ -10,13 +10,13 @@ using System.Net;
 
 namespace Adapters.Producer
 {
-    public class ProducerServices : IProducerServices
+    public class ProducerService : IProducerService
     {
-        private readonly ILogger<ProducerServices> _logger;
+        private readonly ILogger<ProducerService> _logger;
         private readonly string _host;
         private readonly ActivitySource _activitySource;
 
-        public ProducerServices(ILogger<ProducerServices> logger,
+        public ProducerService(ILogger<ProducerService> logger,
             AppSettings appSettings,
             ActivitySource activitySource)
         {

@@ -1,5 +1,6 @@
 ﻿using Adapters.Consumer.Enums;
 using Adapters.Extensions;
+using Core.MessageBus;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
@@ -11,36 +12,39 @@ namespace Adapters.Consumer
         protected readonly Func<TValue, Task<bool>>? functionToRun;
         protected readonly Action<TKey, TValue>? disposeAction;
 
-        public AsyncTopicServiceWorker(ILogger? logger,
+        public AsyncTopicServiceWorker(ILogger logger,
             string host,
             string topic,
             string groupId,
+            IProducerService producerService,
             ActivitySource activitySource,
             Func<TValue, Task>? dispatchFunc,            
-            bool? enableDeserializer = false) : base(logger, host, topic, groupId, activitySource, enableDeserializer)
+            bool? enableDeserializer = false) : base(logger, host, topic, groupId, producerService, activitySource, enableDeserializer)
         {
             this.dispatchFunc = dispatchFunc;
         }
 
-        public AsyncTopicServiceWorker(ILogger? logger,
+        public AsyncTopicServiceWorker(ILogger logger,
             string host,
             string topic,
             string groupId,
+            IProducerService producerService,
             ActivitySource activitySource,
             Func<TValue, Task<bool>>? functionToRun,            
-            bool? enableDeserializer = false) : base(logger, host, topic, groupId, activitySource, enableDeserializer)
+            bool? enableDeserializer = false) : base(logger, host, topic, groupId, producerService, activitySource, enableDeserializer)
         {
             this.functionToRun = functionToRun;
         }
 
-        public AsyncTopicServiceWorker(ILogger? logger,
+        public AsyncTopicServiceWorker(ILogger logger,
             string host,
             string topic,
             string groupId,
+            IProducerService producerService,
             ActivitySource activitySource,
             Action<TKey, TValue>? disposeAction,
             bool? enableDeserializer = false)
-        : base(logger, host, topic, groupId, activitySource, enableDeserializer)
+        : base(logger, host, topic, groupId, producerService, activitySource, enableDeserializer)
         {
             this.disposeAction = disposeAction;
         }

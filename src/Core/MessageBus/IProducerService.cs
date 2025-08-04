@@ -1,6 +1,6 @@
 ﻿namespace Core.MessageBus
 {
-    public interface IProducerServices
+    public interface IProducerService
     {
         Task ProducerAsync<TKey, TValue>(string topic, TKey? key, TValue value, bool enableKeySerializer = false, bool enableValueSerializer = false);
 

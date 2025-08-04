@@ -22,7 +22,7 @@ namespace Consumer.Worker.Extensions
             if (appSettings?.KafkaConfigurations is null)
                 throw new ArgumentNullException("Kafka configurations cannot be null");
 
-            services.AddTransient<IProducerServices, ProducerServices>();
+            services.AddTransient<IProducerService, ProducerService>();
             services.AddTransient<ExecuteAnythingService>();
 
             services.AddAsyncTopicConsumer<ExecuteAnythingService, ExecuteAnythingRequest>(host: appSettings.KafkaConfigurations.Host,
@@ -55,7 +55,7 @@ namespace Consumer.Worker.Extensions
             if (appSettings?.KafkaConfigurations is null)
                 throw new ArgumentNullException("Kafka configurations cannot be null");
 
-            services.AddTransient<IProducerServices, ProducerServices>();
+            services.AddTransient<IProducerService, ProducerService>();
             services.AddTransient<ExecuteAnythingService>();
 
             services.AddAsyncTopicConsumer<ExecuteAnythingService, ExecuteAnythingRequest>(host: appSettings.KafkaConfigurations.Host,
