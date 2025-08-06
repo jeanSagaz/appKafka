@@ -36,8 +36,8 @@ namespace Consumer.Worker
             };
 
             //using (var consumer = new ConsumerBuilder<string, string>(config)
-            using (var consumer = new ConsumerBuilder<Null, ExecuteAnythingRequest>(config)
-                .SetValueDeserializer(new CustomDeserializer<ExecuteAnythingRequest>())
+            using (var consumer = new ConsumerBuilder<Null, Value>(config)
+                .SetValueDeserializer(new CustomDeserializer<Value>())
                 .SetLogHandler((_, logMessage) => _logger.LogInformation("Kafka log: {Message}", logMessage.Message))
                 .SetErrorHandler((_, error) =>
                 {
@@ -61,7 +61,7 @@ namespace Consumer.Worker
                     {
                         _logger.LogInformation("Kafka consumer loop started...\n");
                         var cr = consumer.Consume(stoppingToken);
-                        _logger.LogInformation($"Key: {cr.Message.Key} | Value: {cr.Message.Value.Name}");
+                        _logger.LogInformation($"Key: {cr.Message.Key} | Value: {cr.Message.Value.Input}");
                         _logger.LogInformation("Consumer worker running at: {time}", DateTimeOffset.Now);
                     }
                     catch (OperationCanceledException oce)

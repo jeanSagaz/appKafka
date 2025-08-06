@@ -25,7 +25,7 @@ namespace Adapters.Producer
             _activitySource = activitySource;
         }
 
-        public async Task ProducerAsync<TKey, TValue>(string topic, TKey? key, TValue value, bool enableKeySerializer = false, bool enableValueSerializer = false)
+        public async Task ProducerAsync<TKey, TValue>(string topic, TKey? key, TValue value, bool enableKeySerializer = true, bool enableValueSerializer = true)
         {
             try
             {

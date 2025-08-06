@@ -25,20 +25,20 @@ namespace Consumer.Worker.Extensions
             services.AddTransient<IProducerService, ProducerService>();
             services.AddTransient<ExecuteAnythingService>();
 
-            services.AddAsyncTopicConsumer<ExecuteAnythingService, ExecuteAnythingRequest>(host: appSettings.KafkaConfigurations.Host,
+            services.AddAsyncTopicConsumer<ExecuteAnythingService, Value>(host: appSettings.KafkaConfigurations.Host,
                     topic: "authorizer",
                     groupId: "authorizer-group-0",
                     functionToExecute: async (svc, value) => await svc.ExecuteAnything(value),
                     enableDeserializer: true);
 
-            services.AddAsyncTopicConsumer<ExecuteAnythingService, ExecuteAnythingRequest>(host: appSettings.KafkaConfigurations.Host,
-                topic: "exception",
-                groupId: "exception-group-0",
-                functionToExecute: async (svc, value) => await svc.ThrowException(value));
-
-            services.AddAsyncTopicConsumer<ExecuteAnythingService, string, string>(host: appSettings.KafkaConfigurations.Host,
+            services.AddAsyncTopicConsumer<ExecuteAnythingService, Key, Value>(host: appSettings.KafkaConfigurations.Host,
                 topic: "payment",
                 groupId: "payment-group-0",
+                functionToExecute: async (svc, key, value) => await svc.ExecuteAnything(key, value));
+
+            services.AddAsyncTopicConsumer<ExecuteAnythingService, string, string>(host: appSettings.KafkaConfigurations.Host,
+                topic: "message",
+                groupId: "message-group-0",
                 functionToExecute: async (svc, key, value) => await svc.ExecuteAnything(key, value));
 
             services.AddOpenTelemetry(configuration);
@@ -58,21 +58,21 @@ namespace Consumer.Worker.Extensions
             services.AddTransient<IProducerService, ProducerService>();
             services.AddTransient<ExecuteAnythingService>();
 
-            services.AddAsyncTopicConsumer<ExecuteAnythingService, ExecuteAnythingRequest>(host: appSettings.KafkaConfigurations.Host,
+            services.AddAsyncTopicConsumer<ExecuteAnythingService, Value>(host: appSettings.KafkaConfigurations.Host,
                     topic: "authorizer",
                     groupId: "authorizer-group-0",
-                    functionToExecute: async (svc, value) => await svc.ExecuteAnything(value),
-                    enableDeserializer: true);
+                    functionToExecute: async (svc, value) => await svc.ExecuteAnything(value));
 
-            services.AddAsyncTopicConsumer<ExecuteAnythingService, ExecuteAnythingRequest>(host: appSettings.KafkaConfigurations.Host,
-                topic: "exception",
-                groupId: "exception-group-0",
-                functionToExecute: async (svc, value) => await svc.ThrowException(value));
-
-            services.AddAsyncTopicConsumer<ExecuteAnythingService, string, string>(host: appSettings.KafkaConfigurations.Host,
+            services.AddAsyncTopicConsumer<ExecuteAnythingService, Key, Value>(host: appSettings.KafkaConfigurations.Host,
                 topic: "payment",
                 groupId: "payment-group-0",
                 functionToExecute: async (svc, key, value) => await svc.ExecuteAnything(key, value));
+
+            services.AddAsyncTopicConsumer<ExecuteAnythingService, string, string>(host: appSettings.KafkaConfigurations.Host,
+                topic: "message",
+                groupId: "message-group-0",
+                functionToExecute: async (svc, key, value) => await svc.ExecuteAnything(key, value),
+                enableDeserializer: false);
 
             services.AddOpenTelemetry(configuration);
         }

@@ -1,19 +1,17 @@
-version: "3.9"
-
 services:
 
   zookeeper:
-    image: confluentinc/cp-zookeeper:latest
-    container_name: zookeeper
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-    extra_hosts:
-      - "host.docker.internal:172.17.0.1"
-    networks:
-      - apache-kafka
+      image: confluentinc/cp-zookeeper:latest
+      container_name: zookeeper
+      environment:
+        ZOOKEEPER_CLIENT_PORT: 2181
+      extra_hosts:
+        - "host.docker.internal:172.17.0.1"
+      networks:
+        - apache-kafka
 
   kafka:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:6.0.1
     container_name: kafka
     depends_on:
       - zookeeper
@@ -43,7 +41,7 @@ services:
     #   retries: 10
 
   kafka-topics-generator:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:6.0.1
     container_name: kafka-topics-generator
     depends_on:
       - kafka
@@ -127,66 +125,6 @@ services:
     #   - "host.docker.internal:172.17.0.1"
     networks:
       - apache-kafka
-  
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.11.2
-    container_name: elasticSearch
-    hostname: elasticsearch
-    environment: 
-      - discovery.type=single-node
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-      - http.host=0.0.0.0
-      - transport.host=127.0.0.1
-      - network.host=0.0.0.0
-      - cluster.name="elastic_stack_logging"
-      - node.name="elastic_stack_logging_data"
-      - discovery.zen.minimum_master_nodes=1
-      - http.cors.enabled=true
-      - http.cors.allow-origin="*"
-    # environment:
-    #   - discovery.type=single-node
-    #   - http.host=0.0.0.0
-    #   - transport.host=127.0.0.1
-    #   - network.host=0.0.0.0
-    #   - node.name=elastic_stack_logging_data
-    #   - discovery.zen.minimum_master_nodes=1
-    #   - http.cors.enabled=true
-    #   - http.cors.allow-origin="*"
-    #   - cluster.name=es-docker-cluster
-    #   - cluster.initial_master_nodes=elasticsearch
-    #   - bootstrap.memory_lock=true
-    #   - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-    ports:
-      - 9200:9200
-      - 9300:9300
-    extra_hosts:
-      - "host.docker.internal:172.17.0.1"
-    networks:
-      - apache-kafka
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:7.11.2
-    container_name: kibana
-    depends_on:
-      - elasticsearch
-    ports:
-      - 5601:5601
-    environment:
-      ELASTICSEARCH_URL: http://elasticsearch:9200
-      ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'    
-    extra_hosts:
-      - "host.docker.internal:172.17.0.1"
-    networks:
-      - apache-kafka
-
-volumes:
-  elasticsearch_data:
 
 networks:
   apache-kafka:

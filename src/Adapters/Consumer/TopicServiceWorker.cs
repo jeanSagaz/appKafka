@@ -26,7 +26,7 @@ namespace Adapters.Consumer
             bool? enableDeserializer)
         : base(logger, host, topic, groupId)
         {
-            _enableDeserializer = enableDeserializer ?? false;
+            _enableDeserializer = enableDeserializer ?? true;
             _producerService = producerService;
             _activitySource = activitySource;
         }
@@ -43,14 +43,23 @@ namespace Adapters.Consumer
 
             try
             {
-                key = consumeResult.Message.Key;
+                key = consumeResult.Message.Key;                
+                _logger.LogInformation($"Key: {consumeResult.Message.Key}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in 'TryGetKeyAndValue' getting key");
+            }
+
+            try
+            {
                 value = consumeResult.Message.Value;
-                _logger.LogInformation($"Key: {consumeResult.Message.Key} | Value: {consumeResult.Message.Value}");
+                _logger.LogInformation($"Value: {consumeResult.Message.Value}");
             }
             catch (Exception ex)
             {
                 // postReceiveAction = PostConsumeAction.Requeue;
-                _logger.LogError(ex, "Error in 'TryGetKeyAndValue'");
+                _logger.LogError(ex, "Error in 'TryGetKeyAndValue' getting value");
                 throw;
             }
 
@@ -121,7 +130,7 @@ namespace Adapters.Consumer
                 }
                 catch (Exception ex)
                 {
-                    postReceiveAction = PostConsumeAction.Reject;
+                    //postReceiveAction = PostConsumeAction.Reject;
                     _logger.LogError(ex, "Key Message rejected during desserialization");
                 }
 
@@ -129,10 +138,17 @@ namespace Adapters.Consumer
                 {
                     consumerBuilder.SetValueDeserializer(new CustomDeserializer<TValue>());
                 }
+                catch (ConsumeException ex)
+                {
+                    //postReceiveAction = PostConsumeAction.Reject;
+                    _logger.LogError(ex, "Value Message rejected during serialization - ConsumeException");
+                    throw;
+
+                }
                 catch (Exception ex)
                 {
                     postReceiveAction = PostConsumeAction.Reject;
-                    _logger.LogError(ex, "Value Message rejected during serialization");
+                    _logger.LogError(ex, "Value Message rejected during serialization - Exception");
                 }
             }
 
@@ -187,7 +203,12 @@ namespace Adapters.Consumer
                                 break;
                             }
 
-                            await RetryTopic(consumer, consumeResult);
+                            switch (ex.Error)
+                            {
+                                case Error error when error != ErrorCode.UnknownTopicOrPart:
+                                    await RetryTopic(consumer, consumeResult);
+                                    break;
+                            }                            
                         }
                         catch (Exception ex)
                         {
@@ -211,7 +232,13 @@ namespace Adapters.Consumer
         }
 
         private async Task RetryTopic(IConsumer<TKey, TValue> consumer, ConsumeResult<TKey, TValue> consumeResult)
-        {            
+        {
+            if (consumeResult.LeaderEpoch is null)
+            {
+                _logger.LogWarning($"the message of {_topic}-topic cannot be processed");
+                return;
+            }
+
             if (_attempts <= _connectMaxAttempts)
             {
                 consumer.Seek(consumeResult.TopicPartitionOffset);
@@ -221,6 +248,7 @@ namespace Adapters.Consumer
 
             await _producerService.ProducerAsync<TKey, TValue>($"{_topic}-deadletter-topic", consumeResult.Message.Key, consumeResult.Message.Value, _enableDeserializer, _enableDeserializer);
 
+            _attempts = 0;
             Commit(consumer, consumeResult);
         }
 

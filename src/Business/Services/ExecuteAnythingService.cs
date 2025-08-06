@@ -12,25 +12,33 @@ namespace Business.Services
             _producerServices = producerServices;
         }
 
-        public async Task ThrowException(ExecuteAnythingRequest model)
-        {            
-            throw new Exception("ThrowException - Testando exception");
+        public async Task ExecuteAnything(Key key, Value value)
+        {
+            if (value?.Input == "erro")
+                throw new Exception("ExecuteAnything - Testando exception");
+
+            Console.WriteLine($"key: {key?.Id} - value: {value?.Input}");
+
+            if (value?.Input is not null && value.Input.Equals("producer", StringComparison.InvariantCultureIgnoreCase))
+                await _producerServices.ProducerAsync<string, string>("message-topic", $"key: {key?.Id}", $"value: {value?.Input}", false, false);
         }
 
-        public async Task ExecuteAnything(ExecuteAnythingRequest model)
+        public Task ExecuteAnything(Value value)
         {
-            if (model?.Name == "Jean")
+            if (value?.Input == "erro")
                 throw new Exception("ExecuteAnything - Testando exception");            
 
-            await _producerServices.ProducerAsync<string, string>("payment-topic", $"key: {model?.Name}", $"value: {model?.Name}");
+            Console.WriteLine($"value: {value?.Input}");
+
+            return Task.CompletedTask;
         }
 
         public Task ExecuteAnything(string key, string value)
         {
-            if (value == "Jean")
-                throw new Exception();
+            if (value == "erro")
+                throw new Exception("ExecuteAnything - Testando exception");
 
-            Console.WriteLine($"{key} - {value}");
+            Console.WriteLine($"key: {key} - value: {value}");
 
             return Task.CompletedTask;
         }

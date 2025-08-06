@@ -14,7 +14,7 @@ namespace Adapters.Extensions
            string topic,
            string groupId,
            Func<TService, TKey, TValue, Task> functionToExecute,           
-           bool? enableDeserializer = false)
+           bool? enableDeserializer = true)
         {
             if (services is null) throw new ArgumentNullException(nameof(services));
             if (string.IsNullOrEmpty(host)) throw new ArgumentException($"'{nameof(host)}' cannot be null or empty.", nameof(host));
@@ -41,7 +41,7 @@ namespace Adapters.Extensions
             string topic,
             string groupId,
             Func<TService, TValue, Task> functionToExecute,
-            bool? enableDeserializer = false)
+            bool? enableDeserializer = true)
         {
             if (services is null) throw new ArgumentNullException(nameof(services));
             if (string.IsNullOrEmpty(host)) throw new ArgumentException($"'{nameof(host)}' cannot be null or empty.", nameof(host));
@@ -68,7 +68,7 @@ namespace Adapters.Extensions
            string topic,
            string groupId,
            Action<TService, TKey, TValue> actionToExecute,
-           bool? enableDeserializer = false)
+           bool? enableDeserializer = true)
         {
             if (services is null) throw new ArgumentNullException(nameof(services));
             if (string.IsNullOrEmpty(host)) throw new ArgumentException($"'{nameof(host)}' cannot be null or empty.", nameof(host));
